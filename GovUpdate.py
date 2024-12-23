@@ -162,36 +162,41 @@ st.subheader("Upload Parameters for Prediction")
 uploaded_file = st.file_uploader("Upload your CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file:
-    if uploaded_file.name.endswith("csv"):
-        uploaded_data = pd.read_csv(uploaded_file)
-    else:
-        uploaded_data = pd.read_excel(uploaded_file)
-
-    st.subheader("Uploaded Data")
-    st.write(uploaded_data)
-
-    # ตรวจสอบและพยากรณ์จากข้อมูลที่อัปโหลด
     try:
-        uploaded_scaled = scaler.transform(uploaded_data)
-        uploaded_predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
+        if uploaded_file.name.endswith("csv"):
+            uploaded_data = pd.read_csv(uploaded_file)
+        else:
+            uploaded_data = pd.read_excel(uploaded_file)
 
-        uploaded_data["Prediction"] = uploaded_predictions
-        uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
+        # ตรวจสอบคอลัมน์ที่คาดหวัง
+        expected_columns = ["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]
+        if all(col in uploaded_data.columns for col in expected_columns):
+            st.subheader("Uploaded Data")
+            st.write(uploaded_data)
 
-        st.subheader("Prediction Results")
-        st.write(uploaded_data)
+            # ตรวจสอบและพยากรณ์จากข้อมูลที่อัปโหลด
+            uploaded_scaled = scaler.transform(uploaded_data[expected_columns])
+            uploaded_predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
 
-        # บันทึกผลลัพธ์เป็นไฟล์ CSV สำหรับดาวน์โหลด
-        def convert_df(df):
-            return df.to_csv(index=False).encode('utf-8')
+            uploaded_data["Prediction"] = uploaded_predictions
+            uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
 
-        csv_result = convert_df(uploaded_data)
-        st.download_button(
-            label="Download Prediction Results",
-            data=csv_result,
-            file_name="prediction_results.csv",
-            mime="text/csv"
-        )
+            st.subheader("Prediction Results")
+            st.write(uploaded_data)
+
+            # บันทึกผลลัพธ์เป็นไฟล์ CSV สำหรับดาวน์โหลด
+            def convert_df(df):
+                return df.to_csv(index=False).encode('utf-8')
+
+            csv_result = convert_df(uploaded_data)
+            st.download_button(
+                label="Download Prediction Results",
+                data=csv_result,
+                file_name="prediction_results.csv",
+                mime="text/csv"
+            )
+        else:
+            st.error("Uploaded file is missing some expected columns.")
     except Exception as e:
         st.error(f"Error in processing uploaded file: {e}")
 
