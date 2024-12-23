@@ -79,55 +79,84 @@ model = Sequential([
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 model.fit(X_train, y_train, epochs=25, batch_size=64, verbose=1)
 
-y_pred = (model.predict(X_test) > 0.5).astype(int)
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Model Accuracy: {accuracy * 100:.2f}%")
-
 model.save("predictive_maintenance_model.h5")
 
 st.title("Predictive Maintenance for Governor Control")
 
-# Input แบบกรอกมือ
+# ประวัติการพยากรณ์
+history_file = "prediction_history.csv"
+if not os.path.exists(history_file):
+    history_df = pd.DataFrame(columns=["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)", "Prediction", "Status"])
+    history_df.to_csv(history_file, index=False)
+else:
+    history_df = pd.read_csv(history_file)
+
+st.subheader("Prediction History Overview")
+st.write(f"Total Predictions Made: {len(history_df)}")
+st.write(history_df.tail(10))  # แสดงประวัติ 10 รายการล่าสุด
+
+if not history_df.empty:
+    st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
+
+# Input Parameters
 st.sidebar.subheader("Manual Input Parameters")
+gv_position = st.sidebar.number_input("GV POSITION (%)")
+rb_position = st.sidebar.number_input("RB POSITION (ｰ)")
+gen_mw = st.sidebar.number_input("GEN MW (%)")
+gen_hz = st.sidebar.number_input("GEN Hz (%)")
+turbine_speed = st.sidebar.number_input("TURBINE SPEED (%)")
 
-# ใช้ None เป็นค่าเริ่มต้น
-params = {
-    "GV POSITION (%)": st.sidebar.number_input("GV POSITION (%)", min_value=0, max_value=100),
-    "RB POSITION (ｰ)": st.sidebar.number_input("RB POSITION (ｰ)", min_value=0, max_value=90),
-    "GEN MW (%)": st.sidebar.number_input("GEN MW (%)", min_value=0, max_value=100),
-    "GEN Hz (%)": st.sidebar.number_input("GEN Hz (%)", min_value=47, max_value=53),
-    "TURBINE SPEED (%)": st.sidebar.number_input("TURBINE SPEED (%)", min_value=95, max_value=105),
-}
+data_for_graph = pd.DataFrame({
+    "GV POSITION (%)": [gv_position],
+    "RB POSITION (ｰ)": [rb_position],
+    "GEN MW (%)": [gen_mw],
+    "GEN Hz (%)": [gen_hz],
+    "TURBINE SPEED (%)": [turbine_speed]
+})
 
-# ตรวจสอบว่าทุกพารามิเตอร์มีค่าก่อนการทำนาย
-if all(value is not None for value in params.values()):
-    if st.sidebar.button("Predict from Manual Input"):
-        manual_df = pd.DataFrame([params])
+st.subheader("Input Parameter Values")
+st.write(data_for_graph)
+st.subheader("Graph for Input Parameters")
+st.line_chart(data_for_graph)
 
-        manual_scaled = scaler.transform(manual_df)
-        manual_prediction = (model.predict(manual_scaled) > 0.5).astype(int)[0][0]
-        status = "Repair Needed" if manual_prediction == 1 else "Normal"
-        st.sidebar.write(f"Prediction: {status}")
+if st.sidebar.button("Predict from Manual Input"):
+    manual_df = pd.DataFrame([{
+        "GV POSITION (%)": gv_position,
+        "RB POSITION (ｰ)": rb_position,
+        "GEN MW (%)": gen_mw,
+        "GEN Hz (%)": gen_hz,
+        "TURBINE SPEED (%)": turbine_speed
+    }])
 
-        history_file = "prediction_history.csv"
+    manual_scaled = scaler.transform(manual_df)
+    manual_prediction = (model.predict(manual_scaled) > 0.5).astype(int)[0][0]
+    status = "Repair Needed" if manual_prediction == 1 else "Normal"
 
-        if not os.path.exists(history_file):
-            history_df = pd.DataFrame(columns=list(params.keys()) + ["Prediction", "Status"])
-        else:
-            history_df = pd.read_csv(history_file)
+    st.sidebar.write(f"Prediction: {status}")
 
-        new_data = pd.DataFrame([{**params, "Prediction": manual_prediction, "Status": status}])
-        history_df = pd.concat([history_df, new_data], ignore_index=True)
+    new_data = pd.DataFrame([{
+        "GV POSITION (%)": gv_position,
+        "RB POSITION (ｰ)": rb_position,
+        "GEN MW (%)": gen_mw,
+        "GEN Hz (%)": gen_hz,
+        "TURBINE SPEED (%)": turbine_speed,
+        "Prediction": manual_prediction,
+        "Status": status
+    }])
 
-        if len(history_df) > 1000:
-            history_df = history_df.tail(1000)
+    history_df = pd.concat([history_df, new_data], ignore_index=True)
 
-        history_df.to_csv(history_file, index=False)
+    if len(history_df) > 1000:
+        history_df = history_df.tail(1000)
 
-        st.subheader("Prediction History (Last 1000 Records)")
-        st.line_chart(history_df[list(params.keys())])
+    history_df.to_csv(history_file, index=False)
 
-uploaded_file = st.file_uploader("Upload Parameters (CSV/Excel)", type=["csv", "xlsx"])
+    st.subheader("Updated Prediction History")
+    st.write(history_df.tail(10))
+    st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
+# เพิ่มการอัปโหลดไฟล์ CSV/Excel
+st.subheader("Upload Parameters for Prediction")
+uploaded_file = st.file_uploader("Upload your CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file:
     if uploaded_file.name.endswith("csv"):
@@ -135,20 +164,48 @@ if uploaded_file:
     else:
         uploaded_data = pd.read_excel(uploaded_file)
 
-    uploaded_scaled = scaler.transform(uploaded_data)
-    predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
-    uploaded_data["Prediction"] = predictions
-    uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
-
-    st.subheader("Prediction Results")
+    st.subheader("Uploaded Data")
     st.write(uploaded_data)
 
-    st.subheader("Performance Governor - Uploaded File")
-    st.line_chart(uploaded_data.drop(columns=["Prediction", "Status"]))
+    # ตรวจสอบและพยากรณ์จากข้อมูลที่อัปโหลด
+    try:
+        uploaded_scaled = scaler.transform(uploaded_data)
+        uploaded_predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
 
+        uploaded_data["Prediction"] = uploaded_predictions
+        uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
+
+        st.subheader("Prediction Results")
+        st.write(uploaded_data)
+
+        # บันทึกผลลัพธ์เป็นไฟล์ CSV สำหรับดาวน์โหลด
+        def convert_df(df):
+            return df.to_csv(index=False).encode('utf-8')
+
+        csv_result = convert_df(uploaded_data)
+        st.download_button(
+            label="Download Prediction Results",
+            data=csv_result,
+            file_name="prediction_results.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
+        st.error(f"Error in processing uploaded file: {e}")
+
+# ดาวน์โหลดตัวอย่างข้อมูล
+st.subheader("Download Example Data")
+example_data = pd.DataFrame({
+    "GV POSITION (%)": [50, 60, 70],
+    "RB POSITION (ｰ)": [40, 50, 60],
+    "GEN MW (%)": [80, 90, 85],
+    "GEN Hz (%)": [49, 50, 51],
+    "TURBINE SPEED (%)": [98, 99, 97]
+})
+
+example_csv = example_data.to_csv(index=False).encode('utf-8')
 st.download_button(
     label="Download Example Dataset",
-    data=df.to_csv(index=False),
-    file_name="example_hydropower_data.csv",
+    data=example_csv,
+    file_name="example_dataset.csv",
     mime="text/csv"
 )
