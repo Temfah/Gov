@@ -101,14 +101,14 @@ st.title("Predictive Maintenance for Governor Control")
 # Input แบบกรอกมือ
 st.sidebar.subheader("Manual Input Parameters")
 
-# แสดงกราฟเมื่อกรอกข้อมูล
-gv_position = st.sidebar.number_input("GV POSITION (%)", min_value=0, max_value=100, value=50)
-rb_position = st.sidebar.number_input("RB POSITION (ｰ)", min_value=0, max_value=90, value=45)
-gen_mw = st.sidebar.number_input("GEN MW (%)", min_value=0, max_value=100, value=50)
-gen_hz = st.sidebar.number_input("GEN Hz (%)", min_value=47, max_value=53, value=50)
-turbine_speed = st.sidebar.number_input("TURBINE SPEED (%)", min_value=95, max_value=105, value=100)
+# กำหนดค่าเริ่มต้นเป็น 0
+gv_position = st.sidebar.number_input("GV POSITION (%)", min_value=0, max_value=100, value=0)
+rb_position = st.sidebar.number_input("RB POSITION (ｰ)", min_value=0, max_value=90, value=0)
+gen_mw = st.sidebar.number_input("GEN MW (%)", min_value=0, max_value=100, value=0)
+gen_hz = st.sidebar.number_input("GEN Hz (%)", min_value=47, max_value=53, value=0)
+turbine_speed = st.sidebar.number_input("TURBINE SPEED (%)", min_value=95, max_value=105, value=0)
 
-# สร้างกราฟสำหรับการกรอกข้อมูลในแต่ละพารามิเตอร์
+# แสดงกราฟเมื่อกรอกข้อมูล
 data_for_graph = pd.DataFrame({
     "GV POSITION (%)": [gv_position],
     "RB POSITION (ｰ)": [rb_position],
@@ -117,8 +117,13 @@ data_for_graph = pd.DataFrame({
     "TURBINE SPEED (%)": [turbine_speed]
 })
 
+# แสดงกราฟทันทีเมื่อเปิดหน้าแอป
 st.subheader("Input Parameter Values")
 st.write(data_for_graph)
+
+# การแสดงกราฟทุกครั้งที่กรอกข้อมูล
+st.subheader("Graph for Input Parameters")
+st.line_chart(data_for_graph)
 
 # รอให้กรอกข้อมูลครบก่อนการทำนาย
 if gv_position != 0 and rb_position != 0 and gen_mw != 0 and gen_hz != 0 and turbine_speed != 0:
