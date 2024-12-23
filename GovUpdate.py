@@ -6,7 +6,6 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
 import streamlit as st
 from sklearn.utils import resample
 
@@ -36,6 +35,7 @@ def generate_fault(row):
 
 df["fault"] = df.apply(generate_fault, axis=1)
 
+# ทำการปรับสมดุลข้อมูล
 majority_class = df[df['fault'] == 0]
 minority_class = df[df['fault'] == 1]
 
@@ -57,7 +57,6 @@ else:
     balanced_data = pd.concat([majority_upsampled, minority_class])
 
 balanced_data = balanced_data.sample(frac=1, random_state=42).reset_index(drop=True)
-
 balanced_data.to_csv("balanced_data.csv", index=False)
 
 X = balanced_data.drop(columns=["fault"])
@@ -91,11 +90,13 @@ if not os.path.exists(history_file):
 else:
     history_df = pd.read_csv(history_file)
 
+# แสดงกราฟการพยากรณ์จากประวัติการพยากรณ์
 st.subheader("Prediction History Overview")
 st.write(f"Total Predictions Made: {len(history_df)}")
 st.write(history_df.tail(10))  # แสดงประวัติ 10 รายการล่าสุด
 
 if not history_df.empty:
+    st.subheader("Prediction History Chart")
     st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
 
 # Input Parameters
@@ -146,6 +147,7 @@ if st.sidebar.button("Predict from Manual Input"):
 
     history_df = pd.concat([history_df, new_data], ignore_index=True)
 
+    # เก็บข้อมูลแค่ 1000 รายการล่าสุด
     if len(history_df) > 1000:
         history_df = history_df.tail(1000)
 
@@ -154,6 +156,7 @@ if st.sidebar.button("Predict from Manual Input"):
     st.subheader("Updated Prediction History")
     st.write(history_df.tail(10))
     st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
+
 # เพิ่มการอัปโหลดไฟล์ CSV/Excel
 st.subheader("Upload Parameters for Prediction")
 uploaded_file = st.file_uploader("Upload your CSV or Excel file", type=["csv", "xlsx"])
