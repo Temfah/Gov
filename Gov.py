@@ -100,57 +100,95 @@ st.title("Predictive Maintenance for Governor Control")
 
 # Input แบบกรอกมือ
 st.sidebar.subheader("Manual Input Parameters")
-man_gv = st.sidebar.number_input("GV POSITION (%)")
-man_rb = st.sidebar.number_input("RB POSITION (ｰ)")
-man_gen_mw = st.sidebar.number_input("GEN MW (%)")
-man_gen_hz = st.sidebar.number_input("GEN Hz (%)")
-man_turbine_speed = st.sidebar.number_input("TURBINE SPEED (%)")
 
-if st.sidebar.button("Predict from Manual Input"):
-    manual_df = pd.DataFrame([{
-        "GV POSITION (%)": man_gv,
-        "RB POSITION (ｰ)": man_rb,
-        "GEN MW (%)": man_gen_mw,
-        "GEN Hz (%)": man_gen_hz,
-        "TURBINE SPEED (%)": man_turbine_speed
-    }])
-    manual_scaled = scaler.transform(manual_df)
-    manual_prediction = (model.predict(manual_scaled) > 0.5).astype(int)[0][0]
-    status = "Repair Needed" if manual_prediction == 1 else "Normal"
-    st.sidebar.write(f"Prediction: {status}")
+# แสดงกราฟเมื่อกรอกข้อมูล
+gv_position = st.sidebar.number_input("GV POSITION (%)", min_value=0, max_value=100, value=50)
+rb_position = st.sidebar.number_input("RB POSITION (ｰ)", min_value=0, max_value=90, value=45)
+gen_mw = st.sidebar.number_input("GEN MW (%)", min_value=0, max_value=100, value=50)
+gen_hz = st.sidebar.number_input("GEN Hz (%)", min_value=47, max_value=53, value=50)
+turbine_speed = st.sidebar.number_input("TURBINE SPEED (%)", min_value=95, max_value=105, value=100)
 
-    # เก็บประวัติการกรอกค่าทำนาย
-    history_file = "prediction_history.csv"
-    
-    # ถ้าไฟล์ไม่พบบันทึกให้สร้างไฟล์ใหม่
-    if not os.path.exists(history_file):
-        history_df = pd.DataFrame(columns=["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)", "Prediction", "Status"])
+# สร้างกราฟสำหรับการกรอกข้อมูลในแต่ละพารามิเตอร์
+data_for_graph = pd.DataFrame({
+    "GV POSITION (%)": [gv_position],
+    "RB POSITION (ｰ)": [rb_position],
+    "GEN MW (%)": [gen_mw],
+    "GEN Hz (%)": [gen_hz],
+    "TURBINE SPEED (%)": [turbine_speed]
+})
+
+st.subheader("Input Parameter Values")
+st.write(data_for_graph)
+
+# รอให้กรอกข้อมูลครบก่อนการทำนาย
+if gv_position != 0 and rb_position != 0 and gen_mw != 0 and gen_hz != 0 and turbine_speed != 0:
+    if st.sidebar.button("Predict from Manual Input"):
+        manual_df = pd.DataFrame([{
+            "GV POSITION (%)": gv_position,
+            "RB POSITION (ｰ)": rb_position,
+            "GEN MW (%)": gen_mw,
+            "GEN Hz (%)": gen_hz,
+            "TURBINE SPEED (%)": turbine_speed
+        }])
+
+        manual_scaled = scaler.transform(manual_df)
+        manual_prediction = (model.predict(manual_scaled) > 0.5).astype(int)[0][0]
+        status = "Repair Needed" if manual_prediction == 1 else "Normal"
+        st.sidebar.write(f"Prediction: {status}")
+
+        # เก็บประวัติการกรอกค่าทำนาย
+        history_file = "prediction_history.csv"
+        
+        # ถ้าไฟล์ไม่พบบันทึกให้สร้างไฟล์ใหม่
+        if not os.path.exists(history_file):
+            history_df = pd.DataFrame(columns=["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)", "Prediction", "Status"])
+        else:
+            history_df = pd.read_csv(history_file)
+        
+        # บันทึกข้อมูลการกรอก
+        new_data = pd.DataFrame([{
+            "GV POSITION (%)": gv_position,
+            "RB POSITION (ｰ)": rb_position,
+            "GEN MW (%)": gen_mw,
+            "GEN Hz (%)": gen_hz,
+            "TURBINE SPEED (%)": turbine_speed,
+            "Prediction": manual_prediction,
+            "Status": status
+        }])
+        
+        history_df = pd.concat([history_df, new_data], ignore_index=True)
+        
+        # เก็บข้อมูลประวัติย้อนหลังไม่เกิน 1000 ครั้ง
+        if len(history_df) > 1000:
+            history_df = history_df.tail(1000)
+        
+        # เก็บไฟล์ CSV
+        history_df.to_csv(history_file, index=False)
+
+        # แสดงกราฟประวัติการทำนาย
+        st.subheader("Prediction History (Last 1000 Records)")
+        st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
+
+# การอัปโหลดไฟล์ CSV หรือ Excel
+uploaded_file = st.file_uploader("Upload Parameters (CSV/Excel)", type=["csv", "xlsx"])
+
+if uploaded_file:
+    if uploaded_file.name.endswith("csv"):
+        uploaded_data = pd.read_csv(uploaded_file)
     else:
-        history_df = pd.read_csv(history_file)
-    
-    # บันทึกข้อมูลการกรอก
-    new_data = pd.DataFrame([{
-        "GV POSITION (%)": man_gv,
-        "RB POSITION (ｰ)": man_rb,
-        "GEN MW (%)": man_gen_mw,
-        "GEN Hz (%)": man_gen_hz,
-        "TURBINE SPEED (%)": man_turbine_speed,
-        "Prediction": manual_prediction,
-        "Status": status
-    }])
-    
-    history_df = pd.concat([history_df, new_data], ignore_index=True)
-    
-    # เก็บข้อมูลประวัติย้อนหลังไม่เกิน 1000 ครั้ง
-    if len(history_df) > 1000:
-        history_df = history_df.tail(1000)
-    
-    # เก็บไฟล์ CSV
-    history_df.to_csv(history_file, index=False)
+        uploaded_data = pd.read_excel(uploaded_file)
 
-    # แสดงกราฟประวัติการทำนาย
-    st.subheader("Prediction History (Last 1000 Records)")
-    st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
+    uploaded_scaled = scaler.transform(uploaded_data)
+    predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
+    uploaded_data["Prediction"] = predictions
+    uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
+
+    st.subheader("Prediction Results")
+    st.write(uploaded_data)
+
+    # แสดงกราฟ Performance Governor สำหรับข้อมูลที่ทำนายเป็นทั้ง Normal และ Repair Needed จากการอัปโหลดไฟล์
+    st.subheader("Performance Governor - Uploaded File")
+    st.line_chart(uploaded_data.drop(columns=["Prediction", "Status"]))
 
 # ตัวอย่างการบันทึกข้อมูลจำลอง
 st.download_button(
