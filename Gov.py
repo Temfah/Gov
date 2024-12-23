@@ -76,15 +76,6 @@ scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
-# เก็บข้อมูล X_train, X_test, y_train, y_test ลงในไฟล์ CSV
-train_data = pd.DataFrame(X_train, columns=X.columns)
-train_data["fault"] = y_train
-train_data.to_csv("X_train_data.csv", index=False)
-
-test_data = pd.DataFrame(X_test, columns=X.columns)
-test_data["fault"] = y_test
-test_data.to_csv("X_test_data.csv", index=False)
-
 # สร้างโมเดล
 model = Sequential([
     Dense(128, input_dim=X_train.shape[1], activation='relu'),
@@ -128,53 +119,38 @@ if st.sidebar.button("Predict from Manual Input"):
     status = "Repair Needed" if manual_prediction == 1 else "Normal"
     st.sidebar.write(f"Prediction: {status}")
 
-    # แสดงกราฟสำหรับข้อมูลที่ทำนายเป็นทั้ง Normal และ Repair Needed จากการกรอกมือ
-    manual_df["Prediction"] = manual_prediction
-    manual_df["Status"] = manual_df["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
-    st.subheader("Performance Governor - Manual Input")
-    st.line_chart(manual_df.drop(columns=["Prediction", "Status"]))
-
-    # เก็บข้อมูลที่กรอกมือและทำนายลงในไฟล์ CSV
-    manual_df["Input Source"] = "Manual Input"
-    manual_df.to_csv("manual_input_predictions.csv", mode='a', header=not os.path.exists("manual_input_predictions.csv"), index=False)
-
-# Upload File (CSV หรือ Excel)
-uploaded_file = st.file_uploader("Upload Parameters (CSV/Excel)", type=["csv", "xlsx"])
-
-if uploaded_file:
-    if uploaded_file.name.endswith("csv"):
-        uploaded_data = pd.read_csv(uploaded_file)
+    # เก็บประวัติการกรอกค่าทำนาย
+    history_file = "prediction_history.csv"
+    
+    # ถ้าไฟล์ไม่พบบันทึกให้สร้างไฟล์ใหม่
+    if not os.path.exists(history_file):
+        history_df = pd.DataFrame(columns=["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)", "Prediction", "Status"])
     else:
-        uploaded_data = pd.read_excel(uploaded_file)
+        history_df = pd.read_csv(history_file)
+    
+    # บันทึกข้อมูลการกรอก
+    new_data = pd.DataFrame([{
+        "GV POSITION (%)": man_gv,
+        "RB POSITION (ｰ)": man_rb,
+        "GEN MW (%)": man_gen_mw,
+        "GEN Hz (%)": man_gen_hz,
+        "TURBINE SPEED (%)": man_turbine_speed,
+        "Prediction": manual_prediction,
+        "Status": status
+    }])
+    
+    history_df = pd.concat([history_df, new_data], ignore_index=True)
+    
+    # เก็บข้อมูลประวัติย้อนหลังไม่เกิน 1000 ครั้ง
+    if len(history_df) > 1000:
+        history_df = history_df.tail(1000)
+    
+    # เก็บไฟล์ CSV
+    history_df.to_csv(history_file, index=False)
 
-    uploaded_scaled = scaler.transform(uploaded_data)
-    predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
-    uploaded_data["Prediction"] = predictions
-    uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
-
-    st.subheader("Prediction Results")
-    st.write(uploaded_data)
-
-    # แสดงกราฟ Performance Governor สำหรับข้อมูลที่ทำนายเป็นทั้ง Normal และ Repair Needed จากการอัปโหลดไฟล์
-    st.subheader("Performance Governor - Uploaded File")
-    st.line_chart(uploaded_data.drop(columns=["Prediction", "Status"]))
-
-    # เก็บข้อมูลที่อัปโหลดและทำนายลงในไฟล์ CSV
-    uploaded_data["Input Source"] = "Uploaded File"
-    uploaded_data.to_csv("uploaded_file_predictions.csv", mode='a', header=not os.path.exists("uploaded_file_predictions.csv"), index=False)
-
-    st.subheader("Fault Analysis Graphs")
-    st.line_chart(uploaded_data.drop(columns=["Prediction", "Status"]))
-
-    # สร้าง folder ถ้ายังไม่มี
-    output_folder = "C:/Users/598667/GOVRecent"
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # บันทึกไฟล์ CSV ลงใน folder
-    output_file = os.path.join(output_folder, "predicted_maintenance_data.csv")
-    uploaded_data.to_csv(output_file, index=False)
-    st.write(f"File has been saved to {output_file}")
+    # แสดงกราฟประวัติการทำนาย
+    st.subheader("Prediction History (Last 1000 Records)")
+    st.line_chart(history_df[["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]])
 
 # ตัวอย่างการบันทึกข้อมูลจำลอง
 st.download_button(
