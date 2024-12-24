@@ -33,7 +33,21 @@ def generate_fault(row):
         return 1
     return 0
 
+def check_anomalies(row):
+    anomalies = []
+    if row["RB POSITION (ｰ)"] > 85:
+        anomalies.append("RB POSITION (ｰ) > 85")
+    if row["GEN MW (%)"] > 95:
+        anomalies.append("GEN MW (%) > 95")
+    if row["GEN Hz (%)"] < 48.5 or row["GEN Hz (%)"] > 51.5:
+        anomalies.append("GEN Hz (%) out of [48.5, 51.5]")
+    if row["TURBINE SPEED (%)"] > 103:
+        anomalies.append("TURBINE SPEED (%) > 103")
+    return anomalies if anomalies else None
+
+# เพิ่มคอลัมน์ Anomalies
 df["fault"] = df.apply(generate_fault, axis=1)
+df["Anomalies"] = df.apply(check_anomalies, axis=1)
 
 # ทำการปรับสมดุลข้อมูล
 majority_class = df[df['fault'] == 0]
@@ -59,7 +73,7 @@ else:
 balanced_data = balanced_data.sample(frac=1, random_state=42).reset_index(drop=True)
 balanced_data.to_csv("balanced_data.csv", index=False)
 
-X = balanced_data.drop(columns=["fault"])
+X = balanced_data.drop(columns=["fault", "Anomalies"])
 y = balanced_data["fault"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -85,7 +99,7 @@ st.title("Predictive Maintenance for Governor Control")
 # ประวัติการพยากรณ์
 history_file = "prediction_history.csv"
 if not os.path.exists(history_file):
-    history_df = pd.DataFrame(columns=["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)", "Prediction", "Status"])
+    history_df = pd.DataFrame(columns=["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)", "Prediction", "Status", "Anomalies"])
     history_df.to_csv(history_file, index=False)
 else:
     history_df = pd.read_csv(history_file)
@@ -127,7 +141,11 @@ if st.sidebar.button("Predict from Manual Input"):
     manual_prediction = (model.predict(manual_scaled) > 0.5).astype(int)[0][0]
     status = "Repair Needed" if manual_prediction == 1 else "Normal"
 
+    anomalies = check_anomalies(manual_df.iloc[0])
+    anomalies_text = ", ".join(anomalies) if anomalies else "No anomalies detected"
+
     st.sidebar.write(f"Prediction: {status}")
+    st.sidebar.write(f"Anomalies: {anomalies_text}")
 
     new_data = pd.DataFrame([{
         "GV POSITION (%)": gv_position,
@@ -136,7 +154,8 @@ if st.sidebar.button("Predict from Manual Input"):
         "GEN Hz (%)": gen_hz,
         "TURBINE SPEED (%)": turbine_speed,
         "Prediction": manual_prediction,
-        "Status": status
+        "Status": status,
+        "Anomalies": anomalies_text
     }])
 
     history_df = pd.concat([history_df, new_data], ignore_index=True)
@@ -165,17 +184,15 @@ if uploaded_file:
         # ตรวจสอบคอลัมน์ที่คาดหวัง
         expected_columns = ["GV POSITION (%)", "RB POSITION (ｰ)", "GEN MW (%)", "GEN Hz (%)", "TURBINE SPEED (%)"]
         if all(col in uploaded_data.columns for col in expected_columns):
-            st.subheader("Uploaded Data")
-            st.write(uploaded_data)
+            uploaded_data["Anomalies"] = uploaded_data.apply(check_anomalies, axis=1)
 
-            # ตรวจสอบและพยากรณ์จากข้อมูลที่อัปโหลด
             uploaded_scaled = scaler.transform(uploaded_data[expected_columns])
             uploaded_predictions = (model.predict(uploaded_scaled) > 0.5).astype(int)
 
             uploaded_data["Prediction"] = uploaded_predictions
             uploaded_data["Status"] = uploaded_data["Prediction"].apply(lambda x: "Repair Needed" if x == 1 else "Normal")
 
-            st.subheader("Prediction Results")
+            st.subheader("Prediction Results with Anomalies")
             st.write(uploaded_data)
 
             # บันทึกผลลัพธ์เป็นไฟล์ CSV สำหรับดาวน์โหลด
@@ -184,9 +201,9 @@ if uploaded_file:
 
             csv_result = convert_df(uploaded_data)
             st.download_button(
-                label="Download Prediction Results",
+                label="Download Prediction Results with Anomalies",
                 data=csv_result,
-                file_name="prediction_results.csv",
+                file_name="prediction_results_with_anomalies.csv",
                 mime="text/csv"
             )
         else:
