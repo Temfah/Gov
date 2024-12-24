@@ -114,12 +114,6 @@ data_for_graph = pd.DataFrame({
     "GEN Hz (%)": [gen_hz],
     "TURBINE SPEED (%)": [turbine_speed]
 })
-
-st.subheader("Input Parameter Values")
-st.write(data_for_graph)
-st.subheader("Graph for Input Parameters")
-st.line_chart(data_for_graph)
-
 if st.sidebar.button("Predict from Manual Input"):
     manual_df = pd.DataFrame([{
         "GV POSITION (%)": gv_position,
